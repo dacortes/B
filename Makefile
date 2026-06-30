@@ -27,11 +27,11 @@ LEX_NAME = lexer_b
 DIR_OBJ = .obj
 SUB_DIRS = $(LEXER_DIR)
 
-CC := gcc
+CC := cc
 RMV = rm -rf
+BINARIES = $(LEX_NAME)
 
-all:
-	echo :3
+all: lexer
 
 createdirs:
 	mkdir -p $(DIR_OBJ)
@@ -39,20 +39,40 @@ createdirs:
 	$(foreach dir,$(SUB_DIRS),mkdir -p $(DIR_OBJ)/$(dir);)
 	printf "$(INFO) All object subdirectories are ready\n"
 
-lexer: createdirs
-	@if lex -o $(DIR_OBJ)/$(LEXER_DIR)/$(LEX_NAME) $(LEX_TREE); then \
+lexer_obj: createdirs
+	@if lex -o $(DIR_OBJ)/$(LEXER_DIR)/$(LEX_NAME).c $(LEX_TREE); then \
 	    printf "$(SUCCESS) create: $(LEX_NAME)\n"; \
 	else \
 	    printf "$(ERROR) in $@: create $(LEX_NAME) -- path: $(LEX_TREE)\n"; \
 	    exit 1; \
 	fi
 
-remove_dir:
-	$(RMV) $(DIR_OBJ)
-	printf "$(INFO) directories of deleted objects"
+lexer: lexer_obj
+	if $(CC) $(DIR_OBJ)/$(LEXER_DIR)/$(LEX_NAME).c -o $(LEX_NAME) -ll; then \
+		printf "$(SUCCESS) Created: $(LEX_NAME)\n"; \
+	else \
+		printf "$(ERROR) compilation failure $(LEX_NAME)\n"; \
+		exit 1; \
+	fi
 
-clean: remove_dir
+clean:
+	@if [ -d "$(DIR_OBJ)" ]; then \
+		$(RMV) "$(DIR_OBJ)"; \
+		printf "$(SUCCESS) Object directory removed\n"; \
+	else \
+		printf "$(WARNING) Object directory not found\n"; \
+	fi
 
-.PHONY: lexerz clean remove_dir $(DIR_OBJS)
+fclean: clean
+	@for bin in $(BINARIES); do \
+		if [ -f "$$bin" ]; then \
+			$(RMV) "$$bin"; \
+			printf "$(SUCCESS) Binary $$bin removed\n"; \
+		else \
+			printf "$(WARNING) Binary $$bin not found, skipping\n"; \
+		fi; \
+	done
+
+.PHONY: lexer lexer_obj clean fclean
 .SILENT:
 
