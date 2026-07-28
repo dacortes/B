@@ -45,7 +45,12 @@ LEX       = flex
 YACC      = bison
 RM        = rm -rf
 
+DEBUG_FLAGS = -DDEBUG
+
 all: $(BIN) ## Build the compiler
+
+debug: CFLAGS += $(DEBUG_FLAGS)  ## Build the compiler con logs (DEBUG)
+debug: all
 
 createdirs: ## Create source directories
 	mkdir -p $(OBJ_DIR)
