@@ -1,11 +1,11 @@
 %{
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 void yyerror(const char *s);
 int yylex(void);
 int yywrap(void);
 
-/* Macro de log condicional */
 #ifdef DEBUG
 #define LOG(fmt, ...) fprintf(stderr, "[LOG] " fmt "\n", ##__VA_ARGS__)
 #else
@@ -14,8 +14,8 @@ int yywrap(void);
 %}
 
 %union {
-    int num;
-    char *str;
+	int num;
+	char *str;
 }
 
 %token <str> IDENTIFIER STRING
@@ -42,9 +42,9 @@ int yywrap(void);
 %%
 
 program:
-	extern_def function_def
+	extern_def function_list
 	{
-		LOG("program -> extern_def function_def");
+		LOG("program -> extern_def function_list");
 	}
 	;
 
@@ -56,6 +56,18 @@ extern_def:
 	| extern_def EXTRN IDENTIFIER ';'
 	{
 		LOG("extern_def -> extern_def EXTRN IDENTIFIER ';' (ID: %s)", $3);
+		free($3);
+	}
+	;
+
+function_list:
+	function_def
+	{
+		LOG("function_list -> function_def");
+	}
+	| function_list function_def
+	{
+		LOG("function_list -> function_list function_def");
 	}
 	;
 
@@ -63,6 +75,25 @@ function_def:
 	IDENTIFIER '(' ')' block
 	{
 		LOG("function_def -> IDENTIFIER '(' ')' block (ID: %s)", $1);
+		free($1);
+	}
+	| IDENTIFIER '(' parameter_list ')' block
+	{
+		LOG("function_def -> IDENTIFIER '(' parameter_list ')' block (ID: %s)", $1);
+		free($1);
+	}
+	;
+
+parameter_list:
+	IDENTIFIER
+	{
+		LOG("parameter_list -> IDENTIFIER (ID: %s)", $1);
+		free($1);
+	}
+	| IDENTIFIER ',' parameter_list
+	{
+		LOG("parameter_list -> IDENTIFIER ',' parameter_list (ID: %s)", $1);
+		free($1);
 	}
 	;
 
@@ -89,24 +120,33 @@ declaration:
 	{
 		LOG("declaration -> AUTO identifier_list ';'");
 	}
+	| AUTO IDENTIFIER '=' expression ';'
+	{
+		LOG("declaration -> AUTO IDENTIFIER '=' expression ';' (ID: %s)", $2);
+		free($2);
+	}
 	;
 
 identifier_list:
 	IDENTIFIER
 	{
 		LOG("identifier_list -> IDENTIFIER (ID: %s)", $1);
+		free($1);
 	}
 	| IDENTIFIER '[' expression ']'
 	{
 		LOG("identifier_list -> IDENTIFIER '[' expression ']' (ID: %s)", $1);
+		free($1);
 	}
 	| identifier_list ',' IDENTIFIER
 	{
 		LOG("identifier_list -> identifier_list ',' IDENTIFIER (ID: %s)", $3);
+		free($3);
 	}
 	| identifier_list ',' IDENTIFIER '[' expression ']'
 	{
 		LOG("identifier_list -> identifier_list ',' IDENTIFIER '[' expression ']' (ID: %s)", $3);
+		free($3);
 	}
 	;
 
@@ -315,10 +355,12 @@ primary_expression:
 	| IDENTIFIER
 	{
 		LOG("primary_expression -> IDENTIFIER (nombre: %s)", $1);
+		free($1);
 	}
 	| STRING
 	{
 		LOG("primary_expression -> STRING (valor: %s)", $1);
+		free($1);
 	}
 	| '(' expression ')'
 	{
@@ -327,6 +369,27 @@ primary_expression:
 	| IDENTIFIER '[' expression ']'
 	{
 		LOG("primary_expression -> IDENTIFIER '[' expression ']' (ID: %s)", $1);
+		free($1);
+	}
+	| IDENTIFIER '(' argument_list ')'
+	{
+		LOG("primary_expression -> IDENTIFIER '(' argument_list ')' (función: %s)", $1);
+		free($1);
+	}
+	;
+
+argument_list:
+	%empty
+	{
+		LOG("argument_list -> empty");
+	}
+	| expression
+	{
+		LOG("argument_list -> expression");
+	}
+	| argument_list ',' expression
+	{
+		LOG("argument_list -> argument_list ',' expression");
 	}
 	;
 

@@ -15,10 +15,20 @@
 "++"			{ return INC; }
 "--"			{ return DEC; }
 
-[0-9]+			{ return NUMBER; }
-[a-zA-Z_][a-zA-Z0-9_]* { return IDENTIFIER; }
+[0-9]+ {
+	yylval.num = atoi(yytext);
+	return NUMBER;
+}
 
-\"([^\\\"]|\\.)*\" { return STRING; }
+[a-zA-Z_][a-zA-Z0-9_]* {
+	yylval.str = strdup(yytext);
+	return IDENTIFIER;
+}
+
+\"([^\\\"]|\\.)*\" {
+	yylval.str = strdup(yytext);
+	return STRING;
+}
 
 "=="			{ return EQ; }
 "!="			{ return NE; }
