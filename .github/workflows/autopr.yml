@@ -17,20 +17,47 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
           
-      - name: Fetch base branch
+      - name: Fetch and setup branches
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}
+          # Obtener la rama base
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          echo "Base ref: ${BASE_REF}"
+          
+          # Fetch de la rama base
+          git fetch origin ${BASE_REF}:${BASE_REF}
+          
+          # Mostrar ramas disponibles
+          git branch -a
           
       - name: Generate description with AI
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Obtener el diff de los cambios
-          git diff ${{ github.event.pull_request.base.ref }}..HEAD > /tmp/diff.txt
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          
+          echo "=== Debug Info ==="
+          echo "Base: ${BASE_REF}"
+          echo "Head: ${HEAD_SHA}"
+          echo "Available branches:"
+          git branch -a
+          echo "=== End Debug ==="
+          
+          # Obtener el diff de los cambios usando las referencias correctas
+          git diff ${BASE_REF}..${HEAD_SHA} > /tmp/diff.txt || \
+          git diff origin/${BASE_REF}..${HEAD_SHA} > /tmp/diff.txt || \
+          git diff ${BASE_REF}..HEAD > /tmp/diff.txt
           
           # Obtener lista de commits
-          git log ${{ github.event.pull_request.base.ref }}..HEAD --pretty=format:"- %s" > /tmp/commits.txt
+          git log ${BASE_REF}..${HEAD_SHA} --pretty=format:"- %s" > /tmp/commits.txt || \
+          git log origin/${BASE_REF}..${HEAD_SHA} --pretty=format:"- %s" > /tmp/commits.txt || \
+          git log ${BASE_REF}..HEAD --pretty=format:"- %s" > /tmp/commits.txt
+          
+          # Verificar que tenemos datos
+          echo "Diff size: $(wc -l < /tmp/diff.txt) lines"
+          echo "Commits:"
+          cat /tmp/commits.txt
           
           # Leer los primeros 2000 caracteres del diff
           DIFF_CONTENT=$(head -2000 /tmp/diff.txt | jq -s -R -r @json)
