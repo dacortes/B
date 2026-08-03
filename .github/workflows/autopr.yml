@@ -1,6 +1,6 @@
 name: AutoPR Description
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 permissions:
@@ -22,18 +22,18 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
-          # Añadir esto para PRs desde forks
+          # Necesario para PRs desde forks
           # allow-unsafe-pr-checkout: true
 
-      - name: Configure Git
+      - name: Setup Git and create real branch
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          # Deshabilitar la verificación SSL para resolver problemas de Git
-          git config --global http.sslVerify false
           
-      - name: Fetch base branch
-        run: |
+          # Crear una rama real a partir del SHA
+          BRANCH_NAME="pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}"
+          echo "Creando rama: ${BRANCH_NAME}"
+          git checkout -b ${BRANCH_NAME}
           git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
           git branch -a
           
@@ -48,23 +48,6 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Variables para AutoPR
-          AUTOPR_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AUTOPR_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          # Setup del entorno para AutoPR
-          export GIT_DIR="$(pwd)/.git"
-          export GIT_WORK_TREE="$(pwd)"
-          
-          echo "=== Debug Info ==="
-          echo "Current directory: $(pwd)"
-          echo "Git status:"
-          git status
-          echo "Branches:"
-          git branch -a
-          echo "Commits in PR:"
-          git log ${{ github.event.pull_request.base.ref }}..HEAD --oneline
-          echo "=== End Debug ==="
-          
-          # Ejecutar AutoPR con directorio de trabajo explícito
-          autopr generate --no-dry-run --repo-path "$(pwd)"
+          # Ejecutar AutoPR
+          autopr generate --no-dry-run
