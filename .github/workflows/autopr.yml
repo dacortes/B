@@ -1,6 +1,6 @@
 name: AutoPR Description
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, labeled]
 
 permissions:
@@ -16,19 +16,32 @@ jobs:
     steps:
       - name: Clean AutoPR cache
         run: |
-          rm -rf ~/.local/share/autopr/repos/worktrees/ || true
+          rm -rf ~/.local/share/autopr || true
           rm -rf /tmp/autopr-* || true
 
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify repository status
+      - name: Fetch and setup main branch
         run: |
-          git status
-          git log --oneline -5
-          git remote -v
+          git fetch origin main:main
+          git branch -a
+          
+          echo "=== Debug Info ==="
+          echo "Current branch: $(git branch --show-current)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          echo "Main: $(git rev-parse main)"
+          echo "Commits in PR:"
+          git log main..HEAD --oneline
+          echo "=== End Debug ==="
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
 
       - uses: actions/setup-node@v4
         with:
@@ -42,13 +55,12 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Configurar Git para evitar problemas
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
+          # Verificar que hay commits
+          COMMIT_COUNT=$(git log main..HEAD --oneline | wc -l)
+          echo "Commits nuevos: ${COMMIT_COUNT}"
           
-          # Verificar que hay commits para describir
-          if [ -z "$(git log origin/${{ github.event.pull_request.base.ref }}..HEAD --oneline)" ]; then
-            echo "No hay commits nuevos en esta rama. El PR está vacío."
+          if [ ${COMMIT_COUNT} -eq 0 ]; then
+            echo "⚠️ No hay commits nuevos en este PR"
             exit 1
           fi
           
