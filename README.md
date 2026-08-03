@@ -74,28 +74,30 @@ This project was developed as part of the **42 School** curriculum to understand
 ---
 
 ## 📁 Project Structure
+```text
 b-compiler/
-├── Makefile # Build system with debug mode
-├── README.md # This file
+├── Makefile          # Build system with debug mode
+├── README.md         # This file
 ├── src/
-│ ├── lex/
-│ │ └── b.l # Flex lexical analyzer
-│ └── yacc/
-│ └── b.y # Bison grammar parser
-├── .gen/ # Generated C files (build-time)
-│ ├── lex.yy.c
-│ ├── y.tab.c
-│ └── y.tab.h
-├── .obj/ # Object files (build-time)
-│ ├── lex.yy.o
-│ └── y.tab.o
-├── tests/ # Test B programs
-│ ├── hello.b
-│ ├── arithmetic.b
-│ └── loops.b
-└── examples/ # Example B programs
-├── factorial.b
-└── fibonacci.b
+│   ├── lex/
+│   │   └── b.l       # Flex lexical analyzer
+│   └── yacc/
+│       └── b.y       # Bison grammar parser
+├── .gen/             # Generated C files (build-time)
+│   ├── lex.yy.c
+│   ├── y.tab.c
+│   └── y.tab.h
+├── .obj/             # Object files (build-time)
+│   ├── lex.yy.o
+│   └── y.tab.o
+├── tests/            # Test B programs
+│   ├── hello.b
+│   ├── arithmetic.b
+│   └── loops.b
+└── examples/         # Example B programs
+    ├── factorial.b
+    └── fibonacci.b
+```
 
 
 ---
