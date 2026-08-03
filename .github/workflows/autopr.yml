@@ -1,11 +1,68 @@
-name: Test Workflow
+name: AutoPR Description
 on:
   pull_request_target:
-    types: [labeled]
+    types: [opened, labeled]
 
+permissions:
+  contents: read
+  pull-requests: write
+#test
 jobs:
-  test:
+  generate-description:
+    if: |
+      (github.event.action == 'opened' && contains(github.event.pull_request.labels.*.name, 'generate-description')) ||
+      (github.event.action == 'labeled' && github.event.label.name == 'generate-description')
     runs-on: ubuntu-latest
     steps:
-      - name: Test
-        run: echo "¡El workflow se ejecutó! Label: ${{ github.event.label.name }}"
+      - name: Clean AutoPR cache
+        run: |
+          rm -rf ~/.local/share/autopr || true
+          rm -rf /tmp/autopr-* || true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch and setup main branch
+        run: |
+          git fetch origin main:main
+          git branch -a
+          
+          echo "=== Debug Info ==="
+          echo "Current branch: $(git branch --show-current)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          echo "Main: $(git rev-parse main)"
+          echo "Commits in PR:"
+          git log main..HEAD --oneline
+          echo "=== End Debug ==="
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install AutoPR
+        run: npm install -g autopr
+
+      - name: Generate PR Description
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Verificar que hay commits
+          COMMIT_COUNT=$(git log main..HEAD --oneline | wc -l)
+          echo "Commits nuevos: ${COMMIT_COUNT}"
+          
+          if [ ${COMMIT_COUNT} -eq 0 ]; then
+            echo "⚠️ No hay commits nuevos en este PR"
+            exit 1
+          fi
+          
+          # Ejecutar AutoPR
+          autopr generate --no-dry-run
