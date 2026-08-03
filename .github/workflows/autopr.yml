@@ -2,7 +2,7 @@ name: AutoPR Description
 on:
   push:
     branches:
-      - 5-add-automatic-public-pr  # Tu rama actual
+      - 7-create-readme  # Tu rama actual
 
 permissions:
   contents: read
