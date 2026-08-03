@@ -1,6 +1,6 @@
 name: AutoPR Description
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 permissions:
@@ -9,12 +9,13 @@ permissions:
 
 jobs:
   generate-description:
-    if: github.event.label.name == 'generate-description'
+    if: contains(github.event.pull_request.labels.*.name, 'generate-description')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
