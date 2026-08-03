@@ -1,7 +1,8 @@
 name: AutoPR Description
 on:
-  pull_request:
-    types: [opened, labeled]
+  push:
+    branches:
+      - 5-add-automatic-public-pr  # Tu rama actual
 
 permissions:
   contents: read
@@ -9,26 +10,21 @@ permissions:
 
 jobs:
   generate-description:
-    if: |
-      (github.event.action == 'opened' && contains(github.event.pull_request.labels.*.name, 'generate-description')) ||
-      (github.event.action == 'labeled' && github.event.label.name == 'generate-description')
     runs-on: ubuntu-latest
     steps:
       - name: Clean AutoPR cache
         run: |
-          rm -rf ~/.local/share/autopr/repos/worktrees/ || true
+          rm -rf ~/.local/share/autopr || true
           rm -rf /tmp/autopr-* || true
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify repository status
+      - name: Configure Git
         run: |
-          git status
-          git log --oneline -5
-          git remote -v
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
 
       - uses: actions/setup-node@v4
         with:
@@ -41,16 +37,32 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Configurar Git para evitar problemas
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
+          # Obtener el número del PR actual
+          PR_NUMBER=$(gh pr list --head 5-add-automatic-public-pr --json number --jq '.[0].number')
+          echo "PR Number: ${PR_NUMBER}"
           
-          # Verificar que hay commits para describir
-          if [ -z "$(git log origin/${{ github.event.pull_request.base.ref }}..HEAD --oneline)" ]; then
-            echo "No hay commits nuevos en esta rama. El PR está vacío."
+          if [ -z "${PR_NUMBER}" ]; then
+            echo "No se encontró PR para esta rama"
+            exit 1
+          fi
+          
+          # Verificar commits
+          git fetch origin main:main
+          COMMIT_COUNT=$(git log main..HEAD --oneline | wc -l)
+          echo "Commits nuevos: ${COMMIT_COUNT}"
+          
+          if [ ${COMMIT_COUNT} -eq 0 ]; then
+            echo "⚠️ No hay commits nuevos"
             exit 1
           fi
           
           # Ejecutar AutoPR
           autopr generate --no-dry-run
+          
+          # Actualizar la descripción del PR
+          PR_DESCRIPTION=$(cat /tmp/autopr-description.md 2>/dev/null || echo "")
+          if [ -n "${PR_DESCRIPTION}" ]; then
+            gh pr edit ${PR_NUMBER} --body "${PR_DESCRIPTION}"
+          fi
