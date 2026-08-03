@@ -19,40 +19,106 @@ ERROR = $(LIGTH)$(RED)[ERROR]$(END)
 #                               BUILD VARIABLES                                #
 ################################################################################
 
-LEXER_DIR = lexer
-LEX_FILE  = lex.yy.c
-LEX_TREE = $(LEXER_DIR)/b.l
-LEX_NAME = lexer_b
+SRC_DIR   = src
+LEX_DIR   = $(SRC_DIR)/lex
+YACC_DIR  = $(SRC_DIR)/yacc
 
-DIR_OBJ = .obj
-SUB_DIRS = $(LEXER_DIR)
+LEX_SRC   = $(LEX_DIR)/b.l
+YACC_SRC  = $(YACC_DIR)/b.y
 
-CC := gcc
-RMV = rm -rf
+GEN_DIR   = .gen
+OBJ_DIR   = .obj
 
-all:
-	echo :3
+LEX_GEN   = lex.yy.c
+YACC_GEN  = y.tab.c
+YACC_H    = y.tab.h
 
-createdirs:
-	mkdir -p $(DIR_OBJ)
-	printf "$(INFO) All object directories are ready\n"
-	$(foreach dir,$(SUB_DIRS),mkdir -p $(DIR_OBJ)/$(dir);)
-	printf "$(INFO) All object subdirectories are ready\n"
+OBJS      = $(OBJ_DIR)/$(YACC_GEN:.c=.o) $(OBJ_DIR)/$(LEX_GEN:.c=.o)
 
-lexer: createdirs
-	@if lex -o $(DIR_OBJ)/$(LEXER_DIR)/$(LEX_NAME) $(LEX_TREE); then \
-	    printf "$(SUCCESS) create: $(LEX_NAME)\n"; \
+BIN       = B
+
+CC        = cc
+CFLAGS    = -Wall -Wextra -Werror -I$(GEN_DIR) -g
+LDFLAGS   =
+
+LEX       = flex
+YACC      = bison
+RM        = rm -rf
+
+DEBUG_FLAGS = -DDEBUG
+
+all: $(BIN) ## Build the compiler
+
+debug: CFLAGS += $(DEBUG_FLAGS)  ## Build the compiler con logs (DEBUG)
+debug: all
+
+createdirs: ## Create source directories
+	mkdir -p $(OBJ_DIR)
+	printf "$(INFO) All source directories are ready\n"
+# 	$(foreach dir,$(SUB_DIRS_SRC),mkdir -p $(DIR_SRC)/$(dir);)
+# 	printf "$(INFO) All source subdirectories are ready\n"
+
+$(BIN): createdirs $(OBJS) ## Link object files into final binary
+	@printf "$(INFO) Linking $@\n"
+	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
+	@printf "$(SUCCESS) Compiler $(BIN) built\n"
+
+$(OBJ_DIR)/%.o: $(GEN_DIR)/%.c
+	@printf "$(INFO) Compiling $<\n"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(GEN_DIR)/$(YACC_GEN) $(GEN_DIR)/$(YACC_H): $(YACC_SRC)
+	@mkdir -p $(GEN_DIR)
+	@printf "$(INFO) Generating parser from $<\n"
+	$(YACC) -d -o $(GEN_DIR)/$(YACC_GEN) $<
+	@printf "$(SUCCESS) Generated $(YACC_GEN) and $(YACC_H)\n"
+
+$(GEN_DIR)/$(LEX_GEN): $(LEX_SRC) $(GEN_DIR)/$(YACC_H)
+	@mkdir -p $(GEN_DIR)
+	@printf "$(INFO) Generating lexer from $<\n"
+	$(LEX) -o $(GEN_DIR)/$(LEX_GEN) $<
+	@printf "$(SUCCESS) Generated $(LEX_GEN)\n"
+
+$(OBJ_DIR)/$(YACC_GEN:.c=.o): $(GEN_DIR)/$(YACC_GEN) $(GEN_DIR)/$(YACC_H)
+$(OBJ_DIR)/$(LEX_GEN:.c=.o): $(GEN_DIR)/$(LEX_GEN) $(GEN_DIR)/$(YACC_H)
+
+$(OBJS): | $(OBJ_DIR)
+
+################################################################################
+#                              REGLAS DE LIMPIEZA                              #
+################################################################################
+
+clean: ## Remove generated objects and gen files
+	@if [ -d "$(OBJ_DIR)" ]; then \
+		$(RM) $(OBJ_DIR); \
+		printf "$(SUCCESS) Object directory removed\n"; \
 	else \
-	    printf "$(ERROR) in $@: create $(LEX_NAME) -- path: $(LEX_TREE)\n"; \
-	    exit 1; \
+		printf "$(WARNING) Object directory not found\n"; \
+	fi
+	@if [ -d "$(GEN_DIR)" ]; then \
+		$(RM) $(GEN_DIR); \
+		printf "$(SUCCESS) Generated sources directory removed\n"; \
+	else \
+		printf "$(WARNING) Generated sources directory not found\n"; \
 	fi
 
-remove_dir:
-	$(RMV) $(DIR_OBJ)
-	printf "$(INFO) directories of deleted objects"
+fclean: clean ## Remove binary too
+	@if [ -f "$(BIN)" ]; then \
+		$(RM) $(BIN); \
+		printf "$(SUCCESS) Binary $(BIN) removed\n"; \
+	else \
+		printf "$(WARNING) Binary $(BIN) not found\n"; \
+	fi
 
-clean: remove_dir
+re: fclean all ## Rebuild everything
 
-.PHONY: lexerz clean remove_dir $(DIR_OBJS)
+################################################################################
+#                              AYUDA (make help)                              #
+################################################################################
+
+help: ## Show this help
+	@echo "$(INFO) Available targets:$(END)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(LIGTH)%-20s$(END) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+.PHONY: all clean fclean re help
 .SILENT:
-
