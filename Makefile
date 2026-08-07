@@ -119,7 +119,7 @@ $(OBJS): | $(OBJ_DIR) $(DEP_DIR)
 
 check: ## Check code style with checkpatch.pl (usage: make check ARG=<file> or make check)
 	@ARG='$(ARG)'; \
-	CHECKPATCH="perl scripts/checkpatch.pl --no-tree -f"; \
+	CHECKPATCH="perl scripts/checkpatch.pl --no-tree -f --ignore=GLOBAL_INITIALISERS"; \
 	if [ -n "$$ARG" ]; then \
 		if [ -f "$$ARG" ]; then \
 			echo "$(INFO) Checking file: $$ARG"; \

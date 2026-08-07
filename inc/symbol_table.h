@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /**
  * @file symbol_table.h
  * @brief Symbol table management for the B compiler.
@@ -8,7 +8,6 @@
  * It ensures that duplicate function definitions are detected and reported
  * as errors, maintaining semantic correctness of the compiled program.
  */
-
 #ifndef SYMBOL_TABLE_H
 #define SYMBOL_TABLE_H
 
@@ -18,7 +17,8 @@
 
 /*==============================================================================
  *                                  Constants
- *============================================================================*/
+ *============================================================================
+ */
 
 /**
  * @def ERROR
@@ -40,7 +40,8 @@
 
 /*==============================================================================
  *                                  Data Types
- *============================================================================*/
+ *============================================================================
+ */
 
 /**
  * @struct function_t
@@ -50,14 +51,15 @@
  * whether it has been defined. It is used to detect duplicate definitions
  * and to ensure that the required `main` function is present.
  */
-typedef struct {
+struct  function_t {
 	char *name;      /**< Function name as a dynamically allocated string */
 	int defined;     /**< Boolean flag: 1 if defined, 0 if declared only */
-} function_t;
+};
 
 /*==============================================================================
  *                              Global Variables
- *============================================================================*/
+ *============================================================================
+ */
 
 /**
  * @var functions
@@ -67,7 +69,7 @@ typedef struct {
  * structures. The array grows as new functions are encountered during
  * parsing.
  */
-extern function_t *functions;
+extern struct function_t *functions;
 
 /**
  * @var idxf
@@ -81,7 +83,8 @@ extern int idxf;
 
 /*==============================================================================
  *                              Function Prototypes
- *============================================================================*/
+ *============================================================================
+ */
 
 /**
  * @brief Checks whether a function with the given name already exists.
