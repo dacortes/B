@@ -20,6 +20,7 @@ ERROR = $(LIGTH)$(RED)[ERROR]$(END)
 ################################################################################
 
 SRC_DIR   = src
+INC_DIR   = inc
 LEX_DIR   = $(SRC_DIR)/lex
 YACC_DIR  = $(SRC_DIR)/yacc
 
@@ -28,17 +29,23 @@ YACC_SRC  = $(YACC_DIR)/b.y
 
 GEN_DIR   = .gen
 OBJ_DIR   = .obj
+DEP_DIR   = .dep
 
 LEX_GEN   = lex.yy.c
 YACC_GEN  = y.tab.c
 YACC_H    = y.tab.h
 
-OBJS      = $(OBJ_DIR)/$(YACC_GEN:.c=.o) $(OBJ_DIR)/$(LEX_GEN:.c=.o)
+SRC_EXTRA = $(SRC_DIR)/symbol_table.c
+OBJ_EXTRA = $(SRC_EXTRA:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+DEP_EXTRA = $(SRC_EXTRA:$(SRC_DIR)/%.c=$(DEP_DIR)/%.d)
+
+OBJS      = $(OBJ_DIR)/$(YACC_GEN:.c=.o) $(OBJ_DIR)/$(LEX_GEN:.c=.o) $(OBJ_EXTRA)
+DEPS      = $(DEP_DIR)/$(YACC_GEN:.c=.d) $(DEP_DIR)/$(LEX_GEN:.c=.d) $(DEP_EXTRA)
 
 BIN       = B
 
 CC        = cc
-CFLAGS    = -Wall -Wextra -Werror -I$(GEN_DIR) -g
+CFLAGS    = -Wall -Wextra -Werror -I$(GEN_DIR) -I$(INC_DIR) -g
 LDFLAGS   =
 
 LEX       = flex
@@ -53,7 +60,7 @@ debug: CFLAGS += $(DEBUG_FLAGS)  ## Build the compiler con logs (DEBUG)
 debug: all
 
 createdirs: ## Create source directories
-	mkdir -p $(OBJ_DIR)
+	mkdir -p $(OBJ_DIR) $(DEP_DIR) $(INC_DIR)
 	printf "$(INFO) All source directories are ready\n"
 # 	$(foreach dir,$(SUB_DIRS_SRC),mkdir -p $(DIR_SRC)/$(dir);)
 # 	printf "$(INFO) All source subdirectories are ready\n"
@@ -65,7 +72,12 @@ $(BIN): createdirs $(OBJS) ## Link object files into final binary
 
 $(OBJ_DIR)/%.o: $(GEN_DIR)/%.c
 	@printf "$(INFO) Compiling $<\n"
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(OBJ_DIR) $(DEP_DIR)
+	@printf "$(INFO) Compiling $<\n"
+	$(CC) $(CFLAGS) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
 
 $(GEN_DIR)/$(YACC_GEN) $(GEN_DIR)/$(YACC_H): $(YACC_SRC)
 	@mkdir -p $(GEN_DIR)
@@ -82,10 +94,12 @@ $(GEN_DIR)/$(LEX_GEN): $(LEX_SRC) $(GEN_DIR)/$(YACC_H)
 $(OBJ_DIR)/$(YACC_GEN:.c=.o): $(GEN_DIR)/$(YACC_GEN) $(GEN_DIR)/$(YACC_H)
 $(OBJ_DIR)/$(LEX_GEN:.c=.o): $(GEN_DIR)/$(LEX_GEN) $(GEN_DIR)/$(YACC_H)
 
-$(OBJS): | $(OBJ_DIR)
+$(OBJS): | $(OBJ_DIR) $(DEP_DIR)
+
+-include $(DEPS)
 
 ################################################################################
-#                              REGLAS DE LIMPIEZA                              #
+#                              clean rules		                               #
 ################################################################################
 
 clean: ## Remove generated objects and gen files
@@ -94,6 +108,12 @@ clean: ## Remove generated objects and gen files
 		printf "$(SUCCESS) Object directory removed\n"; \
 	else \
 		printf "$(WARNING) Object directory not found\n"; \
+	fi
+	@if [ -d "$(DEP_DIR)" ]; then \
+		$(RM) $(DEP_DIR); \
+		printf "$(SUCCESS) Dependencies directory removed\n"; \
+	else \
+		printf "$(WARNING) Dependencies directory not found\n"; \
 	fi
 	@if [ -d "$(GEN_DIR)" ]; then \
 		$(RM) $(GEN_DIR); \
@@ -113,7 +133,7 @@ fclean: clean ## Remove binary too
 re: fclean all ## Rebuild everything
 
 ################################################################################
-#                              AYUDA (make help)                              #
+#                              (make help)     		                           #
 ################################################################################
 
 help: ## Show this help
