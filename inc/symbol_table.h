@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /**
  * @file symbol_table.h
  * @brief Symbol table management for the B compiler.

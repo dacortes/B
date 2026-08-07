@@ -53,8 +53,27 @@ YACC      = bison
 RM        = rm -rf
 
 DEBUG_FLAGS = -DDEBUG
+INCLCUDES = $(INC_DIR)/symbol_table.h
+CHECK_FILES = $(SRC_EXTRA) $(INCLCUDES) #$(LEX_SRC) $(YACC_SRC)
+REQUIRED_TOOLS = $(LEX) $(YACC) $(CC) perl
 
-all: $(BIN) ## Build the compiler
+all: check_requirements $(BIN) ## Build the compiler
+
+check_requirements: ## Check if required tools (flex, bison, cc, perl) are installed
+	@failed=false; \
+	for tool in $(REQUIRED_TOOLS); do \
+		if command -v $$tool >/dev/null 2>&1; then \
+			printf "$(GREEN)$(LIGTH)[$$tool is installed.]$(END) Proceeding...\n"; \
+		else \
+			printf "$(RED)$(LIGTH)[$$tool is not installed.]$(END) Please install $$tool to proceed.\n"; \
+			failed=true; \
+		fi; \
+	done; \
+	if [ "$$failed" = true ]; then exit 1; fi
+	@if [ ! -f scripts/checkpatch.pl ]; then \
+		printf "$(ERROR) scripts/checkpatch.pl not found!\n"; \
+		exit 1; \
+	fi
 
 debug: CFLAGS += $(DEBUG_FLAGS)  ## Build the compiler con logs (DEBUG)
 debug: all
@@ -98,6 +117,27 @@ $(OBJS): | $(OBJ_DIR) $(DEP_DIR)
 
 -include $(DEPS)
 
+check: ## Check code style with checkpatch.pl (usage: make check ARG=<file> or make check)
+	@ARG='$(ARG)'; \
+	CHECKPATCH="perl scripts/checkpatch.pl --no-tree -f"; \
+	if [ -n "$$ARG" ]; then \
+		if [ -f "$$ARG" ]; then \
+			echo "$(INFO) Checking file: $$ARG"; \
+			$$CHECKPATCH "$$ARG"; \
+		else \
+			echo "$(ERROR) File '$$ARG' not found$(END)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "$(INFO) Checking all source files..."; \
+		for file in $(CHECK_FILES); do \
+			if [ -f "$$file" ]; then \
+				echo "$(INFO) Checking $$file"; \
+				$$CHECKPATCH "$$file"; \
+			fi; \
+		done; \
+	fi
+
 ################################################################################
 #                              clean rules		                               #
 ################################################################################
@@ -140,5 +180,5 @@ help: ## Show this help
 	@echo "$(INFO) Available targets:$(END)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(LIGTH)%-20s$(END) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-.PHONY: all clean fclean re help
+.PHONY: all check_requirements check clean fclean re help
 .SILENT:
