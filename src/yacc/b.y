@@ -45,6 +45,11 @@ program:
 	extern_def function_list
 	{
 		LOG("program -> extern_def function_list");
+		if (!functionExists("main")) {
+			fprintf(stderr, "Error: 'main' function not found\n");
+			yyerror("Main function missing");
+			YYERROR;
+		}
 	}
 	;
 
@@ -75,11 +80,27 @@ function_def:
 	IDENTIFIER '(' ')' block
 	{
 		LOG("function_def -> IDENTIFIER '(' ')' block (ID: %s)", $1);
+		
+		if (addFuntion($1) == ERROR) {
+			fprintf(stderr, "Error: Function '%s' already defined\n", $1);
+			yyerror("Duplicate function definition");
+			free($1);
+			YYERROR;
+		}
+		
 		free($1);
 	}
 	| IDENTIFIER '(' parameter_list ')' block
 	{
 		LOG("function_def -> IDENTIFIER '(' parameter_list ')' block (ID: %s)", $1);
+		
+		if (addFuntion($1) == ERROR) {
+			fprintf(stderr, "Error: Function '%s' already defined\n", $1);
+			yyerror("Duplicate function definition");
+			free($1);
+			YYERROR;
+		}
+		
 		free($1);
 	}
 	;

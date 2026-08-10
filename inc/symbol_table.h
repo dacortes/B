@@ -44,6 +44,20 @@
  */
 
 /**
+ * @struct var_symbol
+ * @brief Represents a variable entry in the symbol table.
+ *
+ * Each variable has a name, a scope (NULL for global, or the function
+ * name for local), a defined flag, and an offset for stack allocation.
+ */
+struct var_symbol {
+	char *name;		/**< Variable name */
+	char *scope;	/**< NULL for global, function name for local */
+	int defined;	/**< 1 if defined, 0 if extern reference */
+	int offset;		/**< Stack offset (for locals) */
+};
+
+/**
  * @struct function_t
  * @brief Represents a function entry in the symbol table.
  *
@@ -72,6 +86,21 @@ struct  function_t {
 extern struct function_t *functions;
 
 /**
+ * @var var_table
+ * @brief Dynamically allocated array of variable symbols.
+ *
+ * This table stores all variables (both global and local) encountered
+ * during parsing. Each entry contains the variable name, its scope
+ * (NULL for globals, function name for locals), a defined flag, and
+ * its stack offset for local variables.
+ *
+ * The table grows dynamically as new variables are added using
+ * addVariable(). Memory is managed with realloc() and freed with
+ * clearVariables().
+ */
+extern struct var_symbol *var_table;
+
+/**
  * @var idxf
  * @brief Current number of functions stored in the symbol table.
  *
@@ -81,10 +110,42 @@ extern struct function_t *functions;
  */
 extern int idxf;
 
+/**
+ * @var idxv
+ * @brief Number of variables currently stored in the table.
+ */
+extern int idxv;
+
 /*==============================================================================
  *                              Function Prototypes
  *============================================================================
  */
+
+/**
+ * @brief Checks if a variable with the given name and scope exists.
+ *
+ * @param name  Variable name to look up.
+ * @param scope The scope to check: NULL for global, function name for local.
+ * @return true (1) if found, false (0) otherwise.
+ *
+ * @note Two variables with the same name but different scopes are
+ *       considered distinct (e.g., 'x' in main and 'x' in foo).
+ */
+int variableExists(char *name, char *scope);
+
+/**
+ * @brief Adds a new variable to the symbol table.
+ *
+ * @param name  Variable name to add (will be duplicated).
+ * @param scope The scope for this variable: NULL for global, function name for local.
+ * @return 0 on success, ERROR (-1) if duplicate exists or allocation fails.
+ */
+int addVariable(char *name, char *scope);
+
+/**
+ * @brief Clears and frees the entire variable symbol table.
+ */
+void clearVariables(void);
 
 /**
  * @brief Checks whether a function with the given name already exists.
