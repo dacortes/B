@@ -174,6 +174,33 @@ int addVariable(char *name, char *scope)
 }
 
 
+int get_variable_offset(char *name, char *scope) {
+	for (int i = 0; i < idxv; i++) {
+		if (strcmp(var_table[i].name, name) == 0) {
+			if ((scope == NULL && var_table[i].scope == NULL) ||
+				(scope != NULL && var_table[i].scope != NULL &&
+				strcmp(var_table[i].scope, scope) == 0)) {
+				return var_table[i].offset;
+			}
+		}
+	}
+	return -1;
+}
+
+void set_variable_offset(char *name, char *scope, int offset) {
+	for (int i = 0; i < idxv; i++) {
+		if (strcmp(var_table[i].name, name) == 0) {
+			if ((scope == NULL && var_table[i].scope == NULL) ||
+				(scope != NULL && var_table[i].scope != NULL &&
+				strcmp(var_table[i].scope, scope) == 0)) {
+				var_table[i].offset = offset;
+				return;
+			}
+		}
+	}
+}
+
+
 /**
  * @brief Checks if a function with the given name already exists.
  *

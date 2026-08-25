@@ -147,6 +147,10 @@ int addVariable(char *name, char *scope);
  */
 void clearVariables(void);
 
+int get_variable_offset(char *name, char *scope);
+
+void set_variable_offset(char *name, char *scope, int offset);
+
 /**
  * @brief Checks whether a function with the given name already exists.
  *

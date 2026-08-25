@@ -1,5 +1,6 @@
 %{
 #include <symbol_table.h>
+#include <buffer.h>
 #include <stdio.h>
 
 void yyerror(const char *s);
@@ -14,6 +15,7 @@ int yywrap(void);
 
 char	*current_function = NULL;
 int		local_offset = 0;
+int		var_count = 0;
 
 %}
 
@@ -58,6 +60,8 @@ program:
 			fprintf(stdout, ".intel_syntax noprefix\n");
 			fprintf(stdout, ".text\n");
 			fprintf(stdout, ".global main\n");
+			flush_output();
+			clear_buffer();
 		}
 	}
 	;
@@ -89,7 +93,14 @@ function_list:
 	;
 
 function_def:
-	IDENTIFIER '(' ')' { current_function = strdup($1); } block
+	IDENTIFIER '(' ')'
+	{
+		local_offset = 0;
+		emit("%s:\n", $1);
+		emit("\tpush ebp\n");
+		emit("\tmov ebp, esp\n");
+		current_function = strdup($1);
+	} block
 	{
 		LOG("function_def -> IDENTIFIER '(' ')' block (ID: %s)", $1);
 		
@@ -98,13 +109,23 @@ function_def:
 			yyerror("Duplicate function definition");
 			free(current_function);
 			current_function = NULL;
+			clear_buffer();
 			YYERROR;
 		}
-
+		emit("\tmov esp, ebp\n");
+		emit("\tpop ebp\n");
+		emit("\tret\n");
 		free(current_function);
 		current_function = NULL;
 	}
-	| IDENTIFIER '(' parameter_list ')' { current_function = strdup($1); } block
+	| IDENTIFIER '(' parameter_list ')'
+	{
+		local_offset = 0;
+		emit("%s:\n", $1);
+		emit("\tpush ebp\n");
+		emit("\tmov ebp, esp\n");
+		current_function = strdup($1);
+	} block
 	{
 		LOG("function_def -> IDENTIFIER '(' parameter_list ')' block (ID: %s)", $1);
 		
@@ -113,9 +134,12 @@ function_def:
 			yyerror("Duplicate function definition");
 			free(current_function);
 			current_function = NULL;
+			clear_buffer();
 			YYERROR;
 		}
-		
+		emit("\tmov esp, ebp\n");
+		emit("\tpop ebp\n");
+		emit("\tret\n");
 		free(current_function);
 		current_function = NULL;
 	}
@@ -158,10 +182,13 @@ declaration:
 	| AUTO IDENTIFIER '=' expression ';'
 	{
 		LOG("declaration -> AUTO IDENTIFIER '=' expression ';' (ID: %s)", $2);
-
+		local_offset += 4;
+		emit("\tsub esp, 4\n");
 		if (addVariable($2, current_function) == ERROR) {
 			YYERROR;
 		}
+		set_variable_offset($2, current_function, local_offset);
+		emit("\tmov DWORD PTR [ebp-%d], eax\n", local_offset);
 	}
 	;
 
@@ -169,34 +196,42 @@ identifier_list:
 	IDENTIFIER
 	{
 		LOG("identifier_list -> IDENTIFIER (ID: %s)", $1);
-
+		local_offset += 4;
+		emit("\tsub esp, 4\n");
 		if (addVariable($1, current_function) == ERROR) {
 			YYERROR;
 		}
+		set_variable_offset($1, current_function, local_offset);
 	}
 	| IDENTIFIER '[' expression ']'
 	{
 		LOG("identifier_list -> IDENTIFIER '[' expression ']' (ID: %s)", $1);
-
+		local_offset += 4;
+		emit("\tsub esp, 4\n");
 		if (addVariable($1, current_function) == ERROR) {
 			YYERROR;
 		}
+		set_variable_offset($1, current_function, local_offset);
 	}
 	| identifier_list ',' IDENTIFIER
 	{
 		LOG("identifier_list -> identifier_list ',' IDENTIFIER (ID: %s)", $3);
-
+		local_offset += 4;
+		emit("\tsub esp, 4\n");
 		if (addVariable($3, current_function) == ERROR) {
 			YYERROR;
 		}
+		set_variable_offset($3, current_function, local_offset);
 	}
 	| identifier_list ',' IDENTIFIER '[' expression ']'
 	{
 		LOG("identifier_list -> identifier_list ',' IDENTIFIER '[' expression ']' (ID: %s)", $3);
-
+		local_offset += 4;
+		emit("\tsub esp, 4\n");
 		if (addVariable($3, current_function) == ERROR) {
 			YYERROR;
 		}
+		set_variable_offset($3, current_function, local_offset);
 	}
 	;
 
@@ -235,7 +270,7 @@ statement:
 	;
 
 expression_sttmt:
-	expression ';'
+	assignment_expression ';'
 	{
 		LOG("expression_sttmt -> expression ';'");
 	}
@@ -278,9 +313,15 @@ assignment_expression:
 	{
 		LOG("assignment_expression -> logical_or_expression");
 	}
-	| assignment_expression '=' logical_or_expression
+	| IDENTIFIER '=' assignment_expression
 	{
-		LOG("assignment_expression -> assignment_expression '=' logical_or_expression");
+		LOG("assignment_expression -> IDENTIFIER '=' assignment_expression (ID: %s)", $1);
+		int offset = get_variable_offset($1, current_function);
+		if (offset == -1) {
+			fprintf(stderr, "Error: Variable '%s' not declared\n", $1);
+			YYERROR;
+		}
+		emit("\tmov DWORD PTR [ebp-%d], eax\n", offset);
 	}
 	;
 
@@ -349,30 +390,40 @@ additive_expression:
 	{
 		LOG("additive_expression -> multiplicative_expression");
 	}
-	| additive_expression '+' multiplicative_expression
+	| additive_expression '+' { emit("\tpush eax\n"); } multiplicative_expression
 	{
 		LOG("additive_expression -> additive_expression '+' multiplicative_expression");
+		emit("\tpop ebx\n");
+		emit("\tadd eax, ebx\n");
 	}
-	| additive_expression '-' multiplicative_expression
+	| additive_expression '-' { emit("\tpush eax\n"); } multiplicative_expression
 	{
 		LOG("additive_expression -> additive_expression '-' multiplicative_expression");
+		emit("\tpop ebx\n");
+		emit("\tsub ebx, eax\n");
+		emit("\tmov eax, ebx\n");
 	}
 	;
 
 multiplicative_expression:
-	unary_expression
-	{
-		LOG("multiplicative_expression -> unary_expression");
-	}
-	| multiplicative_expression '*' unary_expression
-	{
-		LOG("multiplicative_expression -> multiplicative_expression '*' unary_expression");
-	}
-	| multiplicative_expression '/' unary_expression
-	{
-		LOG("multiplicative_expression -> multiplicative_expression '/' unary_expression");
-	}
-	;
+    unary_expression
+    {
+        LOG("multiplicative_expression -> unary_expression");
+    }
+    | multiplicative_expression '*' { emit("\tpush eax\n"); } unary_expression
+    {
+        LOG("multiplicative_expression -> multiplicative_expression '*' unary_expression");
+        emit("\tpop ebx\n");
+        emit("\timul eax, ebx\n");
+    }
+    | multiplicative_expression '/' { emit("\tpush eax\n"); } unary_expression
+    {
+        LOG("multiplicative_expression -> multiplicative_expression '/' unary_expression");
+        emit("\tpop ebx\n");
+        emit("\tmov edx, 0\n");
+        emit("\tidiv ebx\n");
+    }
+    ;
 
 unary_expression:
 	primary_expression
@@ -401,10 +452,17 @@ primary_expression:
 	NUMBER
 	{
 		LOG("primary_expression -> NUMBER (valor: %d)", $1);
+		emit("\tmov eax, %d\n", $1);
 	}
 	| IDENTIFIER
 	{
 		LOG("primary_expression -> IDENTIFIER (nombre: %s)", $1);
+		int offset = get_variable_offset($1, current_function);
+		if (offset == -1) {
+			fprintf(stderr, "Error: Variable '%s' not declared\n", $1);
+			YYERROR;
+		}
+		emit("\tmov eax, DWORD PTR [ebp-%d]\n", offset);
 	}
 	| STRING
 	{
