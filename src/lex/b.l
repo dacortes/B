@@ -6,7 +6,7 @@
 
 %%
 "auto"			{ return AUTO; }
-"extern"		{ return EXTRN; }
+"extrn"			{ return EXTRN; }
 "if"			{ return IF; }
 "else"			{ return ELSE; }
 "while"			{ return WHILE; }

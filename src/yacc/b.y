@@ -14,14 +14,17 @@ int yywrap(void);
 #define LOG(fmt, ...) ((void)0)
 #endif
 
-char	*current_function = NULL;
-int		local_offset = 0;
-int		var_count = 0;
 
-char *current_loop_start = NULL;
-char *current_loop_end = NULL;
-char *current_if_end = NULL;
-char *current_else_label = NULL;
+int		local_offset = 0;
+int		param_offset = 8;
+int		var_count = 0;
+int		arg_count = 0;
+
+char	*current_function = NULL;
+char	*current_loop_start = NULL;
+char	*current_loop_end = NULL;
+char	*current_if_end = NULL;
+char	*current_else_label = NULL;
 
 %}
 
@@ -83,6 +86,7 @@ extern_def:
 		}
 
 		LOG("extern_def -> extern_def EXTRN IDENTIFIER ';' (ID: %s)", $3);
+		emit("\textern %s\n", $3);
 	}
 	;
 
@@ -140,6 +144,7 @@ function_def:
 	| IDENTIFIER '(' parameter_list ')'
 	{
 		local_offset = 0;
+		param_offset = 8;
 		current_function = strdup($1);
 		emit("%s:\n", $1);
 		emit("\tpush ebp\n");
@@ -170,10 +175,21 @@ parameter_list:
 	IDENTIFIER
 	{
 		LOG("parameter_list -> IDENTIFIER (ID: %s)", $1);
+		if (addVariable($1, current_function) == ERROR) {
+			YYERROR;
+		}
+
+		set_variable_offset($1, current_function, param_offset);
+        param_offset += 4;
 	}
 	| IDENTIFIER ',' parameter_list
 	{
 		LOG("parameter_list -> IDENTIFIER ',' parameter_list (ID: %s)", $1);
+		if (addVariable($1, current_function) == ERROR) {
+			YYERROR;
+		}
+		set_variable_offset($1, current_function, param_offset);
+		param_offset += 4;
 	}
 	;
 
@@ -227,12 +243,18 @@ identifier_list:
 	| IDENTIFIER '[' expression ']'
 	{
 		LOG("identifier_list -> IDENTIFIER '[' expression ']' (ID: %s)", $1);
+		int base_offset = local_offset + 4;
+
+		emit("\tmov ebx, eax\n");
+		emit("\tshl ebx, 2\n");
+		emit("\tsub esp, ebx\n");
+		
 		local_offset += 4;
-		emit("\tsub esp, 4\n");
+		
 		if (addVariable($1, current_function) == ERROR) {
 			YYERROR;
 		}
-		set_variable_offset($1, current_function, local_offset);
+		set_variable_offset($1, current_function, base_offset);
 	}
 	| identifier_list ',' IDENTIFIER
 	{
@@ -247,12 +269,18 @@ identifier_list:
 	| identifier_list ',' IDENTIFIER '[' expression ']'
 	{
 		LOG("identifier_list -> identifier_list ',' IDENTIFIER '[' expression ']' (ID: %s)", $3);
+		int base_offset = local_offset + 4;
+
+		emit("\tmov ebx, eax\n");
+		emit("\tshl ebx, 2\n");
+		emit("\tsub esp, ebx\n");
+		
 		local_offset += 4;
-		emit("\tsub esp, 4\n");
+		
 		if (addVariable($3, current_function) == ERROR) {
 			YYERROR;
 		}
-		set_variable_offset($3, current_function, local_offset);
+		set_variable_offset($3, current_function, base_offset);
 	}
 	;
 
@@ -300,8 +328,8 @@ expression_sttmt:
 if_prefix:
 	IF '('
 	{
-		current_else_label = new_label();
-		current_if_end = new_label();
+		current_else_label = new_label(".L");
+		current_if_end = new_label(".L");
 	}
 	;
 
@@ -336,8 +364,8 @@ if_sttmt:
 while_prefix:
 	WHILE '('
 	{
-		current_loop_start = new_label();
-		current_loop_end = new_label();
+		current_loop_start = new_label(".L");
+		current_loop_end = new_label(".L");
 		emit("%s:\n", current_loop_start);
 	}
 	expression ')'
@@ -377,20 +405,41 @@ expression:
 	}
 	;
 
-assignment_expression:
-	logical_or_expression
+lvalue:
+	IDENTIFIER
 	{
-		LOG("assignment_expression -> logical_or_expression");
-	}
-	| IDENTIFIER '=' assignment_expression
-	{
-		LOG("assignment_expression -> IDENTIFIER '=' assignment_expression (ID: %s)", $1);
+		LOG("lvalue -> IDENTIFIER (ID: %s)", $1);
 		int offset = get_variable_offset($1, current_function);
 		if (offset == -1) {
 			fprintf(stderr, "Error: Variable '%s' not declared\n", $1);
 			YYERROR;
 		}
-		emit("\tmov DWORD PTR [ebp-%d], eax\n", offset);
+		emit("\tlea eax, [ebp-%d]\n", offset);
+	}
+	| IDENTIFIER '[' expression ']'
+	{
+		LOG("lvalue -> IDENTIFIER '[' expression ']' (ID: %s)", $1);
+		int offset = get_variable_offset($1, current_function);
+		if (offset == -1) {
+			fprintf(stderr, "Error: Array '%s' not declared\n", $1);
+			YYERROR;
+		}
+		emit("\tlea ebx, [ebp-%d]\n", offset);
+		emit("\tshl eax, 2\n");
+		emit("\tsub ebx, eax\n");
+		emit("\tmov eax, ebx\n");
+	}
+	;
+
+assignment_expression:
+	logical_or_expression
+	{
+		LOG("assignment_expression -> logical_or_expression");
+	}
+	| lvalue '=' { emit("\tmov edi, eax\n"); } assignment_expression
+	{
+		LOG("assignment_expression -> lvalue '=' assignment_expression");
+		emit("\tmov DWORD PTR [edi], eax\n");
 	}
 	;
 
@@ -399,9 +448,14 @@ logical_or_expression:
 	{
 		LOG("logical_or_expression -> logical_and_expression");
 	}
-	| logical_or_expression OR logical_and_expression
+	| logical_or_expression OR { emit("\tpush eax\n"); } logical_and_expression
 	{
 		LOG("logical_or_expression -> logical_or_expression OR logical_and_expression");
+		emit("\tpop ebx\n");
+		emit("\tor eax, ebx\n");
+		emit("\tcmp eax, 0\n");
+		emit("\tsetne al\n");
+		emit("\tmovzx eax, al\n");
 	}
 	;
 
@@ -410,9 +464,14 @@ logical_and_expression:
 	{
 		LOG("logical_and_expression -> equality_expression");
 	}
-	| logical_and_expression AND equality_expression
+	| logical_and_expression AND { emit("\tpush eax\n"); } equality_expression
 	{
 		LOG("logical_and_expression -> logical_and_expression AND equality_expression");
+		emit("\tpop ebx\n");
+		emit("\tand eax, ebx\n");
+		emit("\tcmp eax, 0\n");
+		emit("\tsetne al\n");
+		emit("\tmovzx eax, al\n");
 	}
 	;
 
@@ -526,18 +585,26 @@ unary_expression:
 	| INC unary_expression
 	{
 		LOG("unary_expression -> INC unary_expression (pre-incremento)");
+		emit("\tinc eax\n");
 	}
 	| DEC unary_expression
 	{
 		LOG("unary_expression -> DEC unary_expression (pre-decremento)");
+		emit("\tdec eax\n");
 	}
 	| primary_expression INC
 	{
 		LOG("unary_expression -> primary_expression INC (post-incremento)");
+		emit("\tmov ebx, eax\n");
+		emit("\tinc eax\n");
+		emit("\tmov eax, ebx\n");
 	}
 	| primary_expression DEC
 	{
 		LOG("unary_expression -> primary_expression DEC (post-decremento)");
+		emit("\tmov ebx, eax\n");
+		emit("\tdec eax\n");
+		emit("\tmov eax, ebx\n");
 	}
 	;
 
@@ -552,14 +619,27 @@ primary_expression:
 		LOG("primary_expression -> IDENTIFIER (nombre: %s)", $1);
 		int offset = get_variable_offset($1, current_function);
 		if (offset == -1) {
-			fprintf(stderr, "Error: Variable '%s' not declared\n", $1);
-			YYERROR;
+			if (variableExists($1, NULL)) {
+				emit("\tmov eax, DWORD PTR [%s]\n", $1);
+			} else {
+				fprintf(stderr, "Error: Variable '%s' not declared\n", $1);
+				YYERROR;
+			}
+		} else {
+			emit("\tmov eax, DWORD PTR [ebp-%d]\n", offset);
 		}
-		emit("\tmov eax, DWORD PTR [ebp-%d]\n", offset);
 	}
 	| STRING
 	{
 		LOG("primary_expression -> STRING (valor: %s)", $1);
+		char *label = new_label_str(".LC");
+		emit(".section .rodata\n");
+		emit("%s:\n", label);
+		emit("\t.string %s\n", $1);
+		emit(".text\n");
+		emit("\tmov eax, %s\n", label);
+		free(label);
+
 	}
 	| '(' expression ')'
 	{
@@ -568,10 +648,23 @@ primary_expression:
 	| IDENTIFIER '[' expression ']'
 	{
 		LOG("primary_expression -> IDENTIFIER '[' expression ']' (ID: %s)", $1);
+		int offset = get_variable_offset($1, current_function);
+		if (offset == -1) {
+			fprintf(stderr, "Error: Array '%s' not declared\n", $1);
+			YYERROR;
+		}
+		emit("\tlea ebx, [ebp-%d]\n", offset);
+		emit("\tshl eax, 2\n");
+		emit("\tsub ebx, eax\n");
+		emit("\tmov eax, DWORD PTR [ebx]\n");
 	}
 	| IDENTIFIER '(' argument_list ')'
 	{
 		LOG("primary_expression -> IDENTIFIER '(' argument_list ')' (función: %s)", $1);
+		emit("\tcall %s\n", $1);
+		if (arg_count > 0) {
+			emit("\tadd esp, %d\n", arg_count * 4);
+		}
 	}
 	;
 
@@ -579,28 +672,42 @@ argument_list:
 	%empty
 	{
 		LOG("argument_list -> empty");
+		arg_count = 0;
 	}
 	| expression
 	{
 		LOG("argument_list -> expression");
+		arg_count = 1;
+		emit("\tpush eax\n");
 	}
 	| argument_list ',' expression
 	{
 		LOG("argument_list -> argument_list ',' expression");
+		arg_count++;
+		emit("\tpush eax\n");
 	}
 	;
 
 %%
 
-void yyerror(const char *s) {
+void yyerror(const char *s)
+{
 	fprintf(stderr, "Error: %s\n", s);
 }
 
-int yywrap(void) {
+int yywrap(void)
+{
 	return 1;
 }
 
-int main(void) {
+// int main(int ac, char** av) {
+// 	fprintf(stdout, "ac = %d ** av =%s\n", ac, *av);
+// 	yyparse();
+// 	return 0;
+// }
+
+int main()
+{
 	yyparse();
 	return 0;
 }
