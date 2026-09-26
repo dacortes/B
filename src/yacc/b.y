@@ -3,6 +3,8 @@
 #include <buffer.h>
 #include <stdio.h>
 #include <labels.h>
+#include <errors.h>
+#include <unistd.h>
 
 void yyerror(const char *s);
 int yylex(void);
@@ -700,14 +702,90 @@ int yywrap(void)
 	return 1;
 }
 
-// int main(int ac, char** av) {
-// 	fprintf(stdout, "ac = %d ** av =%s\n", ac, *av);
-// 	yyparse();
-// 	return 0;
-// }
-
-int main()
+void clearFiles(char **files)
 {
+	if (!files || !*files)
+		return;
+	
+	int i = 0;
+
+	while(files[i]) {
+		free(files[i]);
+		files[i] = NULL;
+		++i;
+	}
+	free(files);
+}
+
+int checkExtension(char *name, int size)
+{
+	if (size < 3) {
+		fprintf(stderr, "Error: \
+		The file name must include its extension and a \
+		name consisting of at least one character.\n");
+		return ERROR;
+	}
+
+	char *exten = &name[size - 2];
+	if (strncmp(".b", exten, 2)) {
+		fprintf(stderr , "Error: file extension %s\n", name);
+		return ERROR;
+	}
+	return false;
+}
+
+int checkFiles(char *name, int size)
+{
+	if (checkExtension(name, size))
+		return ERROR;
+
+	if (access(name, F_OK)) {
+		fprintf(stderr, "Error: The file does not exist: %s.\n", name);
+		return ERROR;
+	}
+	if (access(name, R_OK)) {
+		fprintf(stderr, "Error: The file does not have read permission: %s.\n", name);
+		return ERROR;
+	}
+	return false;
+}
+
+char **initFiles(char **name, int size)
+{
+	if (size <= 1)
+		exit(exitError(err_param, "It has no parameters."));
+
+	char **files = calloc(size, sizeof(char *));
+
+	if (!files)
+		exit(exitError(err_mem, "memory allocation in files"));
+	for(int i = 0; i < (size - 1); i++) {
+		int sizeFile = strlen(name[i + 1]);
+		if (checkFiles(name[i + 1], sizeFile) == ERROR) {
+			clearFiles(files);
+			exit(ERROR);
+		}
+		files[i] = strndup(name[i + 1], sizeFile);
+
+		if (!files[i]) {
+			clearFiles(files);
+			exit(exitError(err_mem, "memory allocation in strndup"));
+		}
+	}
+	return files;
+}
+
+int main(int ac, char **av)
+{
+	char **files = initFiles(av, ac);
+	clearFiles(files);
+	return 0;
 	yyparse();
 	return 0;
 }
+
+// int main()
+// {
+// 	yyparse();
+// 	return 0;
+// }
