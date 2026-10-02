@@ -36,7 +36,8 @@ YACC_GEN  = y.tab.c
 YACC_H    = y.tab.h
 
 SRC_EXTRA = $(SRC_DIR)/symbol_table.c \
-			$(SRC_DIR)/buffer.c $(SRC_DIR)/labels.c $(SRC_DIR)/errors.c
+			$(SRC_DIR)/buffer.c $(SRC_DIR)/labels.c $(SRC_DIR)/errors.c \
+			$(SRC_DIR)/file.c
 
 OBJ_EXTRA = $(SRC_EXTRA:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 DEP_EXTRA = $(SRC_EXTRA:$(SRC_DIR)/%.c=$(DEP_DIR)/%.d)
@@ -56,7 +57,8 @@ RM        = rm -rf
 
 DEBUG_FLAGS = -DDEBUG
 INCLCUDES = $(INC_DIR)/symbol_table.h \
-			$(INC_DIR)/buffer.h $(INC_DIR)/labels.h $(INC_DIR)/errors.h
+			$(INC_DIR)/buffer.h $(INC_DIR)/labels.h $(INC_DIR)/errors.h \
+			$(INC_DIR)/file.h
 
 CHECK_FILES = $(SRC_EXTRA) $(INCLCUDES) #$(LEX_SRC) $(YACC_SRC)
 REQUIRED_TOOLS = $(LEX) $(YACC) $(CC) perl
